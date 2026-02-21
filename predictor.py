@@ -58,11 +58,40 @@ def train_model(features_df):
     return rf_model, gb_model, scaler
 
 
-def simulate_tournament(features_df, rf_model, gb_model, scaler, n_simulations=1000):
+def precompute_win_probabilities(features_df, rf_model, gb_model, scaler):
     teams = features_df["team"].tolist()
     team_features = {}
     for _, row in features_df.iterrows():
         team_features[row["team"]] = np.array([row[col] for col in FEATURE_COLUMNS])
+
+    n = len(teams)
+    diffs = []
+    pairs = []
+    for i in range(n):
+        for j in range(i + 1, n):
+            diff = team_features[teams[i]] - team_features[teams[j]]
+            diffs.append(diff)
+            pairs.append((teams[i], teams[j]))
+
+    diffs_array = np.array(diffs)
+    diffs_scaled = scaler.transform(diffs_array)
+
+    rf_probs = rf_model.predict_proba(diffs_scaled)[:, 1]
+    gb_probs = gb_model.predict_proba(diffs_scaled)[:, 1]
+    combined_probs = 0.5 * rf_probs + 0.5 * gb_probs
+
+    win_prob_lookup = {}
+    for idx, (t1, t2) in enumerate(pairs):
+        win_prob_lookup[(t1, t2)] = combined_probs[idx]
+        win_prob_lookup[(t2, t1)] = 1.0 - combined_probs[idx]
+
+    return win_prob_lookup
+
+
+def simulate_tournament(features_df, rf_model, gb_model, scaler, n_simulations=2000):
+    teams = features_df["team"].tolist()
+
+    win_prob_lookup = precompute_win_probabilities(features_df, rf_model, gb_model, scaler)
 
     win_counts = {team: 0 for team in teams}
     final_counts = {team: 0 for team in teams}
@@ -87,19 +116,14 @@ def simulate_tournament(features_df, rf_model, gb_model, scaler, n_simulations=1
             for i in range(len(group)):
                 for j in range(i+1, len(group)):
                     t1, t2 = group[i], group[j]
-                    diff = team_features[t1] - team_features[t2]
-                    diff_scaled = scaler.transform(diff.reshape(1, -1))
-
-                    rf_prob = rf_model.predict_proba(diff_scaled)[0][1]
-                    gb_prob = gb_model.predict_proba(diff_scaled)[0][1]
-                    win_prob = 0.5 * rf_prob + 0.5 * gb_prob
+                    wp = win_prob_lookup[(t1, t2)]
 
                     rand = np.random.random()
-                    if rand < win_prob * 0.85:
+                    if rand < wp * 0.85:
                         group_points[t1] += 3
                         group_gd[t1] += 1
                         group_gd[t2] -= 1
-                    elif rand < win_prob * 0.85 + 0.20:
+                    elif rand < wp * 0.85 + 0.20:
                         group_points[t1] += 1
                         group_points[t2] += 1
                     else:
@@ -122,15 +146,10 @@ def simulate_tournament(features_df, rf_model, gb_model, scaler, n_simulations=1
             np.random.shuffle(knockout_teams)
             for i in range(0, len(knockout_teams) - 1, 2):
                 t1, t2 = knockout_teams[i], knockout_teams[i+1]
-                diff = team_features[t1] - team_features[t2]
-                diff_scaled = scaler.transform(diff.reshape(1, -1))
+                wp = win_prob_lookup[(t1, t2)]
+                wp = 0.3 + 0.4 * wp
 
-                rf_prob = rf_model.predict_proba(diff_scaled)[0][1]
-                gb_prob = gb_model.predict_proba(diff_scaled)[0][1]
-                win_prob = 0.5 * rf_prob + 0.5 * gb_prob
-                win_prob = 0.3 + 0.4 * win_prob
-
-                if np.random.random() < win_prob:
+                if np.random.random() < wp:
                     next_round.append(t1)
                 else:
                     next_round.append(t2)
