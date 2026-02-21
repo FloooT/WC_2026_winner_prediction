@@ -3,6 +3,11 @@
 ## Overview
 A data analysis project that predicts the FIFA World Cup 2026 winner using machine learning. The app scrapes team performance data from Flashscore, processes it through feature engineering, and uses ensemble ML models (Random Forest + Gradient Boosting) to simulate 2,000 tournament outcomes and produce probability rankings.
 
+<img width="945" height="466" alt="image" src="https://github.com/user-attachments/assets/c41b2850-a1e1-4b73-9468-3e2bb6eaa83d" />
+
+<img width="945" height="500" alt="image" src="https://github.com/user-attachments/assets/8a84221d-76b2-4e08-b3f1-665f05e6ee8a" />
+
+
 ## Recent Changes
 - 2026-02-21: Initial project creation with full pipeline (scraper, data processor, ML predictor, Streamlit dashboard)
 
